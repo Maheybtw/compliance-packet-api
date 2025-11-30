@@ -35,7 +35,7 @@ declare module 'express-serve-static-core' {
 
 const app = express();
 
-// --- CORS: allow frontend + local dev + handle preflight ---
+// --- CORS: allow frontend + local dev ---
 app.use(
   cors({
     origin: true, // reflect the request's Origin header
@@ -43,9 +43,6 @@ app.use(
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
-
-// Ensure Express responds to preflight OPTIONS requests
-app.options('*', cors());
 
 // --- Rate limiters ---
 const registerLimiter = rateLimit({
