@@ -35,22 +35,17 @@ declare module 'express-serve-static-core' {
 
 const app = express();
 
-
-const allowedOrigins = [
-  "http://localhost:3000",
-  "https://compliance-packet-8bi1w5cju-matthew-morris-projects-f0ac18cf.vercel.app",
-];
-
+// --- CORS: allow frontend + local dev + handle preflight ---
 app.use(
   cors({
-    origin: (origin, callback) => {
-      // Allow server-to-server or tools with no origin
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
-      return callback(new Error("Not allowed by CORS"));
-    },
+    origin: true, // reflect the request's Origin header
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
+
+// Ensure Express responds to preflight OPTIONS requests
+app.options('*', cors());
 
 // --- Rate limiters ---
 const registerLimiter = rateLimit({
@@ -72,7 +67,6 @@ const checkLimiter = rateLimit({
   },
 });
 
-app.use(cors());
 app.use(express.json());
 
 // --- DB-backed API key auth middleware ---
