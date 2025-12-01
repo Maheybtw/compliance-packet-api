@@ -106,9 +106,49 @@ async function authMiddleware(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-// --- Health check ---
-app.get('/health', (_req: Request, res: Response) => {
-  res.json({ status: 'ok' });
+// --- Health / status checks ---
+app.get('/health', async (_req: Request, res: Response) => {
+  try {
+    const dbOk = await pool
+      .query('SELECT NOW()')
+      .then(() => true)
+      .catch(() => false);
+
+    return res.json({
+      status: dbOk ? 'ok' : 'degraded',
+      uptime: process.uptime(),
+      db: dbOk ? 'connected' : 'error',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('Error in /health check', err);
+    return res.status(500).json({
+      status: 'error',
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+app.get('/status', async (_req: Request, res: Response) => {
+  try {
+    const dbOk = await pool
+      .query('SELECT NOW()')
+      .then(() => true)
+      .catch(() => false);
+
+    return res.json({
+      status: dbOk ? 'ok' : 'degraded',
+      uptime: process.uptime(),
+      db: dbOk ? 'connected' : 'error',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('Error in /status check', err);
+    return res.status(500).json({
+      status: 'error',
+      timestamp: new Date().toISOString(),
+    });
+  }
 });
 
 // --- Simple registration endpoint to create a user + API key ---
