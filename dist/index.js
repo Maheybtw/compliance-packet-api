@@ -13,10 +13,12 @@ const llmevaluator_1 = require("./services/llmevaluator");
 const crypto_1 = require("crypto");
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const app = (0, express_1.default)();
+// --- CORS: allow frontend + local dev ---
 app.use((0, cors_1.default)({
-    origin: "http://localhost:3000",
+    origin: true, // reflect the request's Origin header
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
 }));
-const PORT = process.env.PORT || 4000;
 // --- Rate limiters ---
 const registerLimiter = (0, express_rate_limit_1.default)({
     windowMs: 60 * 60 * 1000, // 1 hour
@@ -35,7 +37,6 @@ const checkLimiter = (0, express_rate_limit_1.default)({
         return typeof key === 'string' ? key : 'anonymous';
     },
 });
-app.use((0, cors_1.default)());
 app.use(express_1.default.json());
 // --- DB-backed API key auth middleware ---
 async function authMiddleware(req, res, next) {
@@ -291,6 +292,7 @@ app.use((err, _req, res, _next) => {
     console.error('Unhandled error:', err);
     return res.status(500).json({ error: 'Internal server error' });
 });
+const PORT = Number(process.env.PORT) || 4000;
 app.listen(PORT, () => {
     console.log(`Compliance Packet API running on port ${PORT}`);
     console.log('API keys are now managed via the database (api_keys table).');

@@ -64,6 +64,10 @@ const checkLimiter = rateLimit({
   },
 });
 
+// --- Daily usage limits (per API key) ---
+const DAILY_CHECK_LIMIT = 10_000; // hard cap per 24h window
+const DAILY_SOFT_THRESHOLD = Math.floor(DAILY_CHECK_LIMIT * 0.8); // warn at 80%
+
 app.use(express.json());
 
 // --- DB-backed API key auth middleware ---
@@ -204,6 +208,44 @@ app.post('/register', registerLimiter, async (req: Request, res: Response) => {
   } catch (err) {
     console.error('Error during /register', err);
     return res.status(500).json({ error: 'Failed to register user and create API key.' });
+  }
+});
+
+// --- Early access waitlist endpoint ---
+app.post('/early-access', async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body as { email?: string };
+
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({ error: 'Missing "email" field in body.' });
+    }
+
+    const trimmed = email.trim().toLowerCase();
+
+    // Very simple email format check
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmed)) {
+      return res.status(400).json({ error: 'Invalid email format.' });
+    }
+
+    await pool.query(
+      `
+      insert into waitlist (email)
+      values ($1);
+      `,
+      [trimmed]
+    );
+
+    return res.json({
+      success: true,
+      message: 'Added to early access waitlist.',
+    });
+  } catch (err) {
+    console.error('Error in /early-access', err);
+    return res.status(500).json({
+      error: 'internal_error',
+      message: 'Failed to join waitlist. Please try again later.',
+    });
   }
 });
 
@@ -368,9 +410,65 @@ app.post('/check', authMiddleware, checkLimiter, async (req: Request, res: Respo
 
   const content = body.content;
 
+  if (!req.auth) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
   try {
+    // Enforce simple per-API-key daily usage limits (24h rolling window)
+    const usageResult = await pool.query(
+      `
+      select count(*)::int as count
+      from checks
+      where api_key_id = $1
+        and created_at >= (now() at time zone 'utc') - interval '1 day';
+      `,
+      [req.auth.apiKeyId]
+    );
+
+    const usedToday: number = usageResult.rows[0]?.count ?? 0;
+    const projectedUsage = usedToday + 1;
+    console.log('[CHECK_LIMITS]', {
+      apiKeyId: req.auth.apiKeyId,
+      usedToday,
+      projectedUsage,
+      DAILY_CHECK_LIMIT,
+      DAILY_SOFT_THRESHOLD,
+    });
+
+    // Hard limit: block if this request would exceed the daily quota
+    if (projectedUsage > DAILY_CHECK_LIMIT) {
+      const resetAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      return res.status(429).json({
+        error: 'rate_limit_exceeded',
+        message: 'Daily quota exceeded for this API key.',
+        limit: DAILY_CHECK_LIMIT,
+        window: '24h',
+        resetAt,
+      });
+    }
+
+    // Soft limit: warn when this request pushes us over the threshold
+    const nearSoftLimit =
+      projectedUsage >= DAILY_SOFT_THRESHOLD && projectedUsage <= DAILY_CHECK_LIMIT;
+
     const llmPacket = await buildPacketWithLLM(content);
-    const packet = llmPacket ?? buildDummyPacket(content);
+    let packet = llmPacket ?? buildDummyPacket(content);
+
+    // If near the soft limit, append a note to the overall block
+    if (nearSoftLimit) {
+      const notes = Array.isArray(packet.overall.notes)
+        ? [...packet.overall.notes, 'Approaching daily quota for this API key.']
+        : ['Approaching daily quota for this API key.'];
+
+      packet = {
+        ...packet,
+        overall: {
+          ...packet.overall,
+          notes,
+        },
+      };
+    }
 
     // fire-and-forget logging to DB
     if (req.auth) {
