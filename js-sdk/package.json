@@ -1,0 +1,21 @@
+{
+  "name": "compliance-packet",
+  "version": "0.1.1",
+  "description": "Universal compliance packet SDK for JavaScript/TypeScript.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": ["moderation", "compliance", "ai", "llm", "safety"],
+  "author": "Your Name",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

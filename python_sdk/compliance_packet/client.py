@@ -74,13 +74,33 @@ class UsageResponse(TypedDict):
     recent: List[UsageRecentItem]
 
 
-class ComplianceClientError(Exception):
-    """Custom error for Compliance Client request failures."""
+class CompliancePacketError(Exception):
+    """
+    Error raised when the Compliance Packet API returns a non-2xx response.
 
-    def __init__(self, message: str, status: Optional[int] = None, body: Any = None):
+    Matches the universal error schema:
+
+        {
+            "error": {
+                "code": string,
+                "message": string,
+                "status": number,
+                "details"?: any
+            }
+        }
+    """
+
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        status: int,
+        details: Any | None = None,
+    ) -> None:
         super().__init__(message)
+        self.code = code
         self.status = status
-        self.body = body
+        self.details = details
 
 
 class ComplianceClient:
@@ -98,6 +118,9 @@ class ComplianceClient:
 
         packet = client.check("Some content to evaluate")
         print(packet.overall.recommendation)
+
+    Errors:
+        Raises CompliancePacketError when the API returns a non-2xx response.
     """
 
     def __init__(
@@ -136,7 +159,13 @@ class ComplianceClient:
                 timeout=self.timeout,
             )
         except requests.RequestException as e:
-            raise ComplianceClientError(f"Request to {url} failed: {e}") from e
+            # Network-level or request setup error, no structured API error available
+            raise CompliancePacketError(
+                code="NETWORK_ERROR",
+                message=f"Request to {url} failed: {e}",
+                status=0,
+                details=None,
+            ) from e
 
         text = resp.text
         data: Any = None
@@ -147,11 +176,30 @@ class ComplianceClient:
                 data = text
 
         if not resp.ok:
-            message = (
-                (isinstance(data, dict) and (data.get("error") or data.get("message")))
-                or f"Request failed with status {resp.status_code}"
+            # Expect the universal error format: { "error": { code, message, status, details? } }
+            err_payload: Any | None = None
+            if isinstance(data, dict) and "error" in data:
+                err_payload = data["error"]
+
+            if isinstance(err_payload, dict):
+                code = err_payload.get("code") or "UNKNOWN_ERROR"
+                message = err_payload.get("message") or "Request failed"
+                status = int(err_payload.get("status") or resp.status_code)
+                details = err_payload.get("details")
+                raise CompliancePacketError(
+                    code=code,
+                    message=message,
+                    status=status,
+                    details=details,
+                )
+
+            # Fallback if the shape is unexpected
+            raise CompliancePacketError(
+                code="HTTP_ERROR",
+                message=f"Request failed with status {resp.status_code}",
+                status=resp.status_code,
+                details=data,
             )
-            raise ComplianceClientError(message, status=resp.status_code, body=data)
 
         return data
 

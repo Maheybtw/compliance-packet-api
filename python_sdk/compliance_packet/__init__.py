@@ -1,6 +1,6 @@
 from .client import (
     ComplianceClient,
-    ComplianceClientError,
+    CompliancePacketError,
     CompliancePacket,
     SafetyBlock,
     CopyrightBlock,
@@ -12,7 +12,7 @@ from .client import (
 
 __all__ = [
     "ComplianceClient",
-    "ComplianceClientError",
+    "CompliancePacketError",
     "CompliancePacket",
     "SafetyBlock",
     "CopyrightBlock",

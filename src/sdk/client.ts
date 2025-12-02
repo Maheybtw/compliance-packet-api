@@ -59,7 +59,34 @@ export interface UsageResponse {
 
 export interface ComplianceClientOptions {
   apiKey: string;
-  baseUrl?: string; // default: http://localhost:4000
+  baseUrl?: string; // default: production API base, or localhost in dev
+}
+
+/**
+ * Error type thrown by the Compliance Packet client when the API
+ * returns a non-2xx response using the universal error schema:
+ *
+ * {
+ *   "error": {
+ *     "code": string;
+ *     "message": string;
+ *     "status": number;
+ *     "details"?: unknown;
+ *   }
+ * }
+ */
+export class CompliancePacketAPIError extends Error {
+  code: string;
+  status: number;
+  details?: any;
+
+  constructor(code: string, message: string, status: number, details?: any) {
+    super(message);
+    this.name = 'CompliancePacketAPIError';
+    this.code = code;
+    this.status = status;
+    this.details = details;
+  }
 }
 
 /**
@@ -71,12 +98,16 @@ export interface ComplianceClientOptions {
  *   const usage = await client.usage();
  */
 export function createComplianceClient(options: ComplianceClientOptions) {
-  const baseUrl = (options.baseUrl ?? 'http://localhost:4000').replace(/\/+$/, '');
-  const apiKey = options.apiKey;
-
-  if (!apiKey || typeof apiKey !== 'string') {
+  if (!options.apiKey || typeof options.apiKey !== 'string') {
     throw new Error('apiKey is required to create the Compliance client.');
   }
+
+  const apiKey = options.apiKey.trim();
+
+  // Default base URL: production API base, can be overridden via options.baseUrl.
+  const defaultBase = 'https://compliance-packet-api-production.up.railway.app';
+
+  const baseUrl = (options.baseUrl ?? defaultBase).replace(/\/+$/, '');
 
   async function request<T>(path: string, init: RequestInit): Promise<T> {
     const url = `${baseUrl}${path}`;
@@ -90,28 +121,37 @@ export function createComplianceClient(options: ComplianceClientOptions) {
       },
     });
 
-    const text = await res.text();
-    let json: any = null;
-
-    if (text) {
-      try {
-        json = JSON.parse(text);
-      } catch {
-        // leave json as null if it wasn't valid JSON
-      }
-    }
+    const contentType = res.headers.get('content-type') || '';
+    const body =
+      contentType.includes('application/json')
+        ? await res.json().catch(() => null)
+        : await res.text().catch(() => null);
 
     if (!res.ok) {
-      const message =
-        (json && (json.error || json.message)) ||
-        `Request failed with status ${res.status}`;
-      const err = new Error(message);
-      (err as any).status = res.status;
-      (err as any).body = json ?? text;
-      throw err;
+      // Expect the universal error format: { error: { code, message, status, details? } }
+      let errPayload: any = null;
+      if (body && typeof body === 'object' && 'error' in body) {
+        errPayload = (body as any).error;
+      }
+
+      if (errPayload && typeof errPayload === 'object') {
+        throw new CompliancePacketAPIError(
+          errPayload.code ?? 'UNKNOWN_ERROR',
+          errPayload.message ?? 'Request failed',
+          errPayload.status ?? res.status,
+          errPayload.details
+        );
+      }
+
+      // Fallback if the shape is unexpected
+      throw new CompliancePacketAPIError(
+        'HTTP_ERROR',
+        `Request failed with status ${res.status}`,
+        res.status
+      );
     }
 
-    return json as T;
+    return body as T;
   }
 
   return {

@@ -31,7 +31,26 @@ declare module 'express-serve-static-core' {
   }
 }
 
+type ApiErrorPayload = {
+  code: string;
+  message: string;
+  status: number;
+  details?: unknown;
+};
 
+function sendError(
+  res: Response,
+  status: number,
+  code: string,
+  message: string,
+  details?: unknown
+) {
+  const payload: ApiErrorPayload = { code, message, status };
+  if (details !== undefined) {
+    payload.details = details;
+  }
+  return res.status(status).json({ error: payload });
+}
 
 const app = express();
 
@@ -75,7 +94,12 @@ async function authMiddleware(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.header('Authorization');
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Missing or invalid Authorization header' });
+    return sendError(
+      res,
+      401,
+      'AUTH_MISSING',
+      'Missing or invalid Authorization header.'
+    );
   }
 
   const token = authHeader.substring('Bearer '.length).trim();
@@ -93,7 +117,7 @@ async function authMiddleware(req: Request, res: Response, next: NextFunction) {
     );
 
     if (result.rows.length === 0) {
-      return res.status(403).json({ error: 'Invalid API key' });
+      return sendError(res, 403, 'AUTH_INVALID_API_KEY', 'Invalid API key.');
     }
 
     const row = result.rows[0];
@@ -106,7 +130,7 @@ async function authMiddleware(req: Request, res: Response, next: NextFunction) {
     return next();
   } catch (err) {
     console.error('Error checking API key', err);
-    return res.status(500).json({ error: 'Internal auth error' });
+    return sendError(res, 500, 'AUTH_INTERNAL_ERROR', 'Internal auth error.');
   }
 }
 
@@ -160,7 +184,12 @@ app.post('/register', registerLimiter, async (req: Request, res: Response) => {
   const { email, label } = req.body as { email?: string; label?: string };
 
   if (!email || typeof email !== 'string' || !email.includes('@')) {
-    return res.status(400).json({ error: 'A valid "email" field is required.' });
+    return sendError(
+      res,
+      400,
+      'REGISTER_INVALID_EMAIL',
+      'A valid "email" field is required.'
+    );
   }
 
   try {
@@ -207,7 +236,12 @@ app.post('/register', registerLimiter, async (req: Request, res: Response) => {
     return res.status(201).json({ apiKey });
   } catch (err) {
     console.error('Error during /register', err);
-    return res.status(500).json({ error: 'Failed to register user and create API key.' });
+    return sendError(
+      res,
+      500,
+      'REGISTER_FAILED',
+      'Failed to register user and create API key.'
+    );
   }
 });
 
@@ -217,7 +251,12 @@ app.post('/early-access', async (req: Request, res: Response) => {
     const { email } = req.body as { email?: string };
 
     if (!email || typeof email !== 'string') {
-      return res.status(400).json({ error: 'Missing "email" field in body.' });
+      return sendError(
+        res,
+        400,
+        'WAITLIST_MISSING_EMAIL',
+        'Missing "email" field in body.'
+      );
     }
 
     const trimmed = email.trim().toLowerCase();
@@ -225,7 +264,7 @@ app.post('/early-access', async (req: Request, res: Response) => {
     // Very simple email format check
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(trimmed)) {
-      return res.status(400).json({ error: 'Invalid email format.' });
+      return sendError(res, 400, 'WAITLIST_INVALID_EMAIL', 'Invalid email format.');
     }
 
     await pool.query(
@@ -242,17 +281,19 @@ app.post('/early-access', async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error('Error in /early-access', err);
-    return res.status(500).json({
-      error: 'internal_error',
-      message: 'Failed to join waitlist. Please try again later.',
-    });
+    return sendError(
+      res,
+      500,
+      'WAITLIST_INTERNAL_ERROR',
+      'Failed to join waitlist. Please try again later.'
+    );
   }
 });
 
 // --- Usage endpoint: simple per-API-key stats ---
 app.get('/usage', authMiddleware, async (req: Request, res: Response) => {
   if (!req.auth) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    return sendError(res, 401, 'USAGE_UNAUTHORIZED', 'Unauthorized.');
   }
 
   try {
@@ -304,7 +345,12 @@ app.get('/usage', authMiddleware, async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error('Error fetching usage stats', err);
-    return res.status(500).json({ error: 'Failed to fetch usage stats.' });
+    return sendError(
+      res,
+      500,
+      'USAGE_INTERNAL_ERROR',
+      'Failed to fetch usage stats.'
+    );
   }
 });
 
@@ -405,13 +451,18 @@ app.post('/check', authMiddleware, checkLimiter, async (req: Request, res: Respo
   const body = req.body as Partial<CheckRequestBody>;
 
   if (!body || typeof body.content !== 'string' || body.content.trim().length === 0) {
-    return res.status(400).json({ error: 'Missing or invalid "content" field in body.' });
+    return sendError(
+      res,
+      400,
+      'CHECK_INVALID_CONTENT',
+      'Missing or invalid "content" field in body.'
+    );
   }
 
   const content = body.content;
 
   if (!req.auth) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    return sendError(res, 401, 'CHECK_UNAUTHORIZED', 'Unauthorized.');
   }
 
   try {
@@ -439,9 +490,7 @@ app.post('/check', authMiddleware, checkLimiter, async (req: Request, res: Respo
     // Hard limit: block if this request would exceed the daily quota
     if (projectedUsage > DAILY_CHECK_LIMIT) {
       const resetAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-      return res.status(429).json({
-        error: 'rate_limit_exceeded',
-        message: 'Daily quota exceeded for this API key.',
+      return sendError(res, 429, 'RATE_LIMIT_EXCEEDED', 'Daily quota exceeded for this API key.', {
         limit: DAILY_CHECK_LIMIT,
         window: '24h',
         resetAt,
@@ -517,7 +566,7 @@ app.post('/check', authMiddleware, checkLimiter, async (req: Request, res: Respo
 // --- Global error handler (last middleware) ---
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   console.error('Unhandled error:', err);
-  return res.status(500).json({ error: 'Internal server error' });
+  return sendError(res, 500, 'INTERNAL_SERVER_ERROR', 'Internal server error.');
 });
 const PORT = Number(process.env.PORT) || 4000;
 app.listen(PORT, () => {

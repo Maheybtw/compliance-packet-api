@@ -1,4 +1,40 @@
+# --- Environment files ---
 .env
-.env
-node_modules
-.env
+.env.*
+!.env.example
+
+# --- Node / TypeScript ---
+node_modules/
+dist/
+build/
+coverage/
+.nyc_output/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Python ---
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.python-version
+.mypy_cache/
+.pytest_cache/
+.python_sdk_build/
+python_sdk/dist/
+python_sdk/build/
+
+# --- Local / scratch directories ---
+cp-test-env/
+compliance-demo/
+
+# --- Logs ---
+*.log
+
+# --- OS / Editor ---
+.DS_Store
+.vscode/
+.idea/
