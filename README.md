@@ -1,82 +1,89 @@
+# 📦 Universal Compliance Packet API  
+**AI‑native safety, copyright, privacy, and compliance scoring — in one unified packet.**  
+A production-grade API for trust layers, moderation pipelines, and AI agents.
 
-⸻
+---
 
-📦 Universal Compliance Packet API
+## 🚀 What This Is  
+Compliance Packet converts *any text* into a structured, deterministic “compliance packet” containing:
 
-A lightweight, developer-friendly API for generating structured safety, copyright, privacy, and compliance packets from arbitrary text.
+- **Safety risk scoring**  
+- **Copyright & IP risk analysis**  
+- **Privacy & PII detection**  
+- **Overall compliance recommendation**  
+- **Meta fields for auditing and routing**
 
-This service provides a simple HTTP interface that turns raw text into a consistent Compliance Packet — designed for content filtering, moderation, routing, and trust-layer applications.
+Built for developers who want a **single, stable interface** for trust/safety logic across any AI system.
 
-Built with:
-	•	TypeScript
-	•	Node.js + Express
-	•	Supabase (Postgres)
-	•	OpenAI / LLM-based scoring
-	•	Entropy-minimisation principles (AI-native architecture)
+---
 
-⸻
+## ✨ Why Developers Use This  
+- 🔒 *Consistent*: Always returns the same schema  
+- ⚡ *Fast*: Lightweight, stateless API  
+- 🧠 *LLM‑powered*: Scoring powered by OpenAI + fallback heuristics  
+- 🧩 *Easily pluggable*: SDKs for JavaScript & Python  
+- 📊 *Analytics-ready*: Automatic logging in Supabase  
+- 🛠 *Production-friendly*: Typed errors, rate limits, stable endpoints
 
-🚀 Quick Start
+---
 
-1. Register & Get Your API Key
+# 1. 🔑 Get Your API Key
 
-Send a POST request to:
-
+### Endpoint  
+```
 POST /register
+```
 
-Body:
-
+### Body
+```json
 {
   "email": "your@email.com",
-  "label": "optional key label"
+  "label": "optional label"
 }
+```
 
-Response:
+### Response
+```json
+{ "apiKey": "cpk_1234abcd..." }
+```
 
-{
-  "apiKey": "cpk_1234abcd..."
-}
+This key is used for all authenticated requests.
 
-This key authenticates all future requests.
+---
 
-⸻
+# 2. 🔐 Authentication
 
-🔐 Authentication
+Every protected endpoint requires:
 
-All protected endpoints require this header:
-
+```
 Authorization: Bearer <API_KEY>
+```
 
-Example:
+Invalid or missing keys return a typed error:
 
--H "Authorization: Bearer cpk_1234abcd..."
-
-Invalid or inactive API keys return:
-
-{ "error": "Invalid API key" }
-
-
-⸻
-
-📝 Check Content
-
-Main endpoint:
-
-POST /check
-
-Headers:
-
-Authorization: Bearer <api-key>
-Content-Type: application/json
-
-Body:
-
+```json
 {
-  "content": "Your text to evaluate"
+  "error": "AUTH_INVALID_API_KEY",
+  "message": "Invalid or inactive API key."
 }
+```
 
-Sample Response (Compliance Packet)
+---
 
+# 3. 📝 Check Content
+
+### Endpoint  
+```
+POST /check
+```
+
+### Body
+```json
+{ "content": "Text to evaluate." }
+```
+
+### Sample Response
+```json
 {
   "safety": {
     "score": 0.1,
@@ -84,9 +91,9 @@ Sample Response (Compliance Packet)
     "flags": []
   },
   "copyright": {
-    "risk": 0,
-    "assessment": "low risk",
-    "reason": "No copyrighted material detected."
+    "risk": 0.1,
+    "assessment": "low risk of copyright infringement",
+    "reason": "The text is generic and not proprietary."
   },
   "privacy": {
     "piiDetected": false,
@@ -104,149 +111,191 @@ Sample Response (Compliance Packet)
     "modelVersion": "v1-llm"
   }
 }
+```
 
+---
 
-⸻
+# 4. 📊 Compliance Packet Specification
 
-📊 Compliance Packet Specification
+### **Safety**
+| Field | Type | Meaning |
+|-------|-------|---------|
+| score | number (0–1) | Higher = more dangerous |
+| category | low_risk / medium_risk / high_risk | Severity |
+| flags | string[] | Trigger categories |
 
-Every /check returns a complete CompliancePacket:
+### **Copyright**
+| Field | Type | Meaning |
+|-------|-------|---------|
+| risk | number | Probability of infringement |
+| assessment | string | Human-readable summary |
+| reason | string | Explanation |
 
-Safety Block
+### **Privacy**
+| Field | Type |
+|-------|-------|
+| piiDetected | boolean |
+| piiTypes | string[] |
+| notes | string[] |
 
-Field	Type	Meaning
-score	number (0–1)	Higher = more dangerous
-category	‘low_risk’ | ‘medium_risk’ | ‘high_risk’	Categorised severity
-flags	string[]	Specific safety triggers
+### **Overall**
+| Field | Type |
+|-------|-------|
+| complianceScore | number |
+| recommendation | allow / review / block |
+| notes | string[] |
 
-Copyright Block
+### **Meta**
+| Field | Type |
+|-------|-------|
+| inputId | uuid |
+| checkedAt | ISO timestamp |
+| modelVersion | string |
 
-Field	Type	Meaning
-risk	number (0–1)	Likelihood of infringement
-assessment	string	Human-readable assessment
-reason	string	Explanation of the scoring
+---
 
-Privacy Block
+# 5. 📚 Logging & Audit Trail
 
-Field	Type
-piiDetected	boolean
-piiTypes	string[]
-notes	string[]
+Every `/check` is automatically saved to Supabase:
 
-Overall Block
+- user_id  
+- api_key_id  
+- content hash  
+- safety score + category  
+- copyright risk  
+- PII detection  
+- final recommendation  
+- compliance score  
+- timestamp  
 
-Field	Type
-complianceScore	number
-recommendation	‘allow’ | ‘review’ | ‘block’
-notes	string[]
+Perfect for billing, analytics, dashboards, or internal audits.
 
-Meta Block
+---
 
-Field	Type
-inputId	uuid
-checkedAt	ISO timestamp
-modelVersion	string
+# 6. 🧠 Architecture Overview
 
+- LLM scoring handled via `services/llmevaluator.ts`  
+- Deterministic fallback ensures robustness if LLM fails  
+- Entropy-minimised scoring for stable, repeatable results  
+- Stateless microservice = horizontally scalable  
+- Typed error schema across all SDKs  
 
-⸻
+---
 
-📚 Logging & Auditing
+# 7. 🛠 Dev Setup
 
-Every /check request automatically logs into Supabase:
-	•	user_id
-	•	api_key_id
-	•	content_hash
-	•	safety_score
-	•	safety_category
-	•	copyright_risk
-	•	pii_detected
-	•	recommendation
-	•	compliance_score
-	•	timestamp
+Clone & install:
 
-This creates instant dashboards for usage, analytics, and billing.
+```sh
+git clone https://github.com/your-org/compliance-packet-api
+cd compliance-packet-api
+npm install
+```
 
-⸻
+Environment:
 
-🧠 Model Architecture (High-Level)
-	•	LLM scoring is handled by /services/llmevaluator.ts
-	•	If the LLM fails, a robust heuristic fallback runs
-	•	Every packet is deterministic, structured, and entropy-minimised
-	•	Microservice is intentionally stateless, idempotent, and observable
-
-More advanced model pipelines will be introduced in v2.
-
-⸻
-
-🏗 Roadmap
-
-✅ v1 (current)
-	•	API key generation
-	•	Database-backed authentication
-	•	LLM-based scoring
-	•	Logging + analytics
-	•	Production-ready REST endpoints
-
-🔜 v2
-	•	Rate limiting
-	•	Web dashboard
-	•	Multi-model evaluation
-	•	Prompt-tuned scoring models
-	•	Tiered billing
-	•	Realtime monitoring
-
-⸻
-
-🛠 Dev Setup
-	1.	Clone repo
-	2.	Create .env:
-
+```
 PORT=4000
 DATABASE_URL=your-postgres-url
-OPENAI_API_KEY=your-openai-key
+OPENAI_API_KEY=your-key
+```
 
-	3.	Install & run:
+Run locally:
 
-npm install
+```sh
 npm run dev
+```
 
+---
 
-⸻
+# 8. 🧩 SDKs
 
-🧩 SDK Usage (Node / TypeScript)
+## JavaScript / TypeScript
 
-A minimal SDK is included to make it easy to call the API without manually constructing HTTP requests.
+Install:
 
-Install dependencies (if needed):
+```sh
+npm install compliance-packet
+```
 
-npm install
+Usage:
 
-Import and create a client:
+```ts
+import { createComplianceClient } from "compliance-packet";
 
-import { createComplianceClient } from ‘./src/sdk/client’;
+const client = createComplianceClient({ apiKey: "cpk_xxx" });
 
-const client = createComplianceClient({
-apiKey: ‘cpk_your_key_here’,
-baseUrl: ‘http://localhost:4000’ // optional, defaults to localhost
-});
-
-Check content:
-
-const packet = await client.check(“Some text to evaluate”);
-console.log(packet);
-
-Get usage stats:
-
+const packet = await client.check("Text to evaluate");
 const usage = await client.usage();
-console.log(usage);
+```
 
-A full usage example is available in src/sdk/test-sdk.ts.
+---
 
-⸻
+## Python
 
-❤️ License
+Install:
 
-MIT 
+```sh
+pip install compliance-packet
+```
 
-⸻
+Usage:
 
+```python
+from compliance_packet import ComplianceClient
+
+client = ComplianceClient(api_key="cpk_xxx")
+
+packet = client.check("Text to evaluate")
+usage = client.usage()
+```
+
+---
+
+# 9. 🚦 Status Endpoint
+
+```
+GET /status
+```
+
+Returns:
+
+```json
+{ "status": "ok" }
+```
+
+Used for health checks and monitoring.
+
+---
+
+# 10. 🛤 Roadmap
+
+### ✅ v1 (Current)
+- API keys  
+- Auth middleware  
+- LLM evaluation  
+- Fallback heuristics  
+- Logs + analytics  
+- JS/TS + Python SDKs  
+- Status endpoint  
+- Unified error schema  
+
+### 🔜 v2
+- Dashboard with charts  
+- Webhooks + async mode  
+- Tiered billing  
+- Multi-model evaluation  
+- Real-time moderation streams  
+
+---
+
+# 11. ⚠️ Limitations & Disclaimer
+
+Compliance Packet provides **probabilistic scoring**, not legal advice.  
+It should not be the *sole* decision-maker in high-stakes environments.  
+Always add human review for safety‑critical applications.
+
+---
+
+# ❤️ License  
+MIT
